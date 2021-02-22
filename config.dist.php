@@ -14,6 +14,8 @@ return [
     'host' => '...', # DNS name or IP
     'port' => 587,   # likely to be 25, 465 or 587
 
+    // 'verify-peer' => true, # Needed to be "false" if the server is defined as an IP!
+
     // Mailbox credentials
     'user' => '...',
     'pass' => '...',
@@ -28,15 +30,5 @@ return [
      */
 
     // 'timezone' => 'Europe/Berlin', # default: UTC
-
-    /**
-     * ----------------------------------------------------------------------
-     * Optional
-     * ----------------------------------------------------------------------
-     */
-
-    // 'verify-peer' => true, # Needed to be "false" if the server is defined as an IP!
-
-    // 'debug' => 1, # 0 .. 4; default: 0
 
 ];

@@ -16,9 +16,10 @@ Send emails secure via your own email server
             -z      BCC: address(es) (comma separated)
             -a      Attachment(s)
             -p      Priority (0|1)
+            -v[vvv] PHPMailer verbosity
 
     Possible formats for emails: 'name@example.com' or 'any name <name@example.com>'
 
 Copy `config.dist.php` and adjust for your needs
 
-    $ cp vendor/k-ko/send-mail-smtp/config.dist.php email-config.php
+    $ cp vendor/k-ko/send-mail-smtp/config.dist.php email.conf.php

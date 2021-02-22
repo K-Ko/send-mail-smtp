@@ -24,7 +24,8 @@ function usage($msg = '', $rc = 0)
     printf("\t-w\tCC: address(es) (comma separated)\n");
     printf("\t-z\tBCC: address(es) (comma separated)\n");
     printf("\t-a\tAttachment(s)\n");
-    printf("\t-p\tPriority (0|1)\n\n");
+    printf("\t-p\tPriority (0|1)\n");
+    printf("\t-v[vvv]\tPHPMailer verbosity\n\n");
     printf("Possible formats for emails: 'name@example.com' or 'any name <name@example.com>'\n");
 
     exit($rc);
@@ -49,7 +50,7 @@ foreach ($autoloads as $autoload) {
     die("\n::: ERROR Missing vendor/autoload.php, actual directory is '" . getcwd() . "'\n");
 }
 
-$options = getopt("hc:t:w:z:s:b:f:a:p:");
+$options = getopt("hc:t:w:z:s:b:f:a:p:v");
 
 array_key_exists('h', $options) && usage();
 
@@ -98,8 +99,8 @@ if (!($config['verify-peer'] ?? true)){
 // Tell PHPMailer to use SMTP
 $mail->isSMTP();
 
-// Enable SMTP debugging
-$mail->SMTPDebug = $config['debug'] ?? 0;
+// Enable SMTP debugging, -v ... -vvvv
+$mail->SMTPDebug = min([count((array) ($options['v'] ?? null)), 4]);
 
 // Set the hostname and port of the mail server
 $mail->Host = $config['host'] ?? '';

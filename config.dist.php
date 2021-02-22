@@ -35,6 +35,8 @@ return [
      * ----------------------------------------------------------------------
      */
 
+    // 'verify-peer' => true, # Needed to be "false" if the server is defined as an IP!
+
     // 'debug' => 1, # 0 .. 4; default: 0
 
 ];

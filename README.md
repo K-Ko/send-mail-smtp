@@ -21,4 +21,4 @@ Send emails secure via your own email server
 
 Copy `config.dist.php` and adjust for your needs
 
-    $ cp config.dist.php email-config.php
+    $ cp vendor/k-ko/send-mail-smtp/config.dist.php email-config.php

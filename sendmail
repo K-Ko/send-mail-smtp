@@ -85,15 +85,15 @@ $mail->CharSet    = 'UTF-8';
 $mail->Encoding   = 'base64';
 $mail->AllowEmpty = true; // Body may be empty, e.g. for status emails
 
-// $mail->SMTPOptions = [
-//     'ssl' => [
-//         'verify_peer' => false,
-//         'verify_peer_name' => false,
-//         'allow_self_signed' => true
-//     ]
-// ];
-
-// $mail->SMTPOptions['ssl']['verify_peer_name'] = false;
+if (!($config['verify-peer'] ?? true)){
+    $mail->SMTPOptions = [
+        'ssl' => [
+            'verify_peer' => false,
+            'verify_peer_name' => false,
+            'allow_self_signed' => true
+        ]
+    ];
+}
 
 // Tell PHPMailer to use SMTP
 $mail->isSMTP();

@@ -1,0 +1,182 @@
+#!/usr/bin/env php
+<?php
+// phpcs:ignorefile
+
+// ini_set('display_errors', 1);
+// error_reporting(-1);
+
+/**
+ *
+ */
+function usage($msg = '', $rc = 0)
+{
+    global $argv;
+
+    $msg && printf("\nERROR - $msg\n");
+
+    printf("\nUsage: " . $argv[0] . " -c <config-file> -t <To: address> -s <subject> [options]\n\n");
+    printf("Options:\n");
+    printf("\t-c\tConfig file {required}\n");
+    printf("\t-t\tTo: address(es) (comma separated) {required}\n");
+    printf("\t-s\tSubject {required}\n");
+    printf("\t-b\tPlain text body, if starts with @ assume get from file\n");
+    printf("\t-f\tHTML body, if starts with @ assume get from file\n");
+    printf("\t-w\tCC: address(es) (comma separated)\n");
+    printf("\t-z\tBCC: address(es) (comma separated)\n");
+    printf("\t-a\tAttachment(s)\n");
+    printf("\t-p\tPriority (0|1)\n\n");
+    printf("Possible formats for emails: 'name@example.com' or 'any name <name@example.com>'\n");
+
+    exit($rc);
+}
+
+/**
+ * Try to find autoload.php
+ */
+$autoloads = [
+    getcwd() . '/vendor/autoload.php',
+    getcwd() . '/../vendor/autoload.php',
+    getcwd() . '/../../vendor/autoload.php',
+    __DIR__  . '/vendor/autoload.php',
+];
+
+foreach ($autoloads as $autoload) {
+    if (is_file($autoload)) {
+        require $autoload;
+        break;
+    }
+
+    die("\n::: ERROR Missing vendor/autoload.php, actual directory is '" . getcwd() . "'\n");
+}
+
+$options = getopt("hc:t:w:z:s:b:f:a:p:");
+
+array_key_exists('h', $options) && usage();
+
+$config      = $options['c'] ?? '';
+$to          = $options['t'] ?? '';
+$subject     = $options['s'] ?? '';
+$body        = $options['b'] ?? null;
+$html        = $options['f'] ?? null;
+$cc          = $options['w'] ?? null;
+$bcc         = $options['z'] ?? null;
+$attachments = $options['a'] ?? null;
+$priority    = $options['p'] ?? 0;
+
+if ($config == '' || $to == '' || $subject == '') {
+    usage('Missing required parameter(s)', 1);
+}
+
+if ($config && is_file($config)) {
+    $config = require $config;
+} else {
+    die("\n::: ERROR Missing config file, actual directory is '" . getcwd() . "'\n");;
+}
+
+// SMTP needs accurate times, and the PHP time zone MUST be set
+// This should be done in your php.ini, but this is how to do it if you don't have access to that
+date_default_timezone_set($config['timezone'] ?? 'UTC');
+
+// Create a new PHPMailer instance
+$mail = new \PHPMailer\PHPMailer\PHPMailer();
+
+$mail->XMailer    = null; // Suppress X-Mailer header
+$mail->CharSet    = 'UTF-8';
+$mail->Encoding   = 'base64';
+$mail->AllowEmpty = true; // Body may be empty, e.g. for status emails
+
+// $mail->SMTPOptions = [
+//     'ssl' => [
+//         'verify_peer' => false,
+//         'verify_peer_name' => false,
+//         'allow_self_signed' => true
+//     ]
+// ];
+
+// $mail->SMTPOptions['ssl']['verify_peer_name'] = false;
+
+// Tell PHPMailer to use SMTP
+$mail->isSMTP();
+
+// Enable SMTP debugging
+$mail->SMTPDebug = $config['debug'] ?? 0;
+
+// Set the hostname and port of the mail server
+$mail->Host = $config['host'] ?? '';
+$mail->Port = $config['port'] ?? 25; # likely to be 25, 465 or 587
+
+// Whether to use SMTP authentication
+$mail->SMTPAuth = true;
+
+// Username and password to use for SMTP authentication
+$mail->Username = $config['user'] ?? '';
+$mail->Password = $config['pass'] ?? '';
+
+// Set who the message is to be sent from
+if (isset($config['from'])) {
+    if (preg_match('~^(.+) *<(.+?)>~', $config['from'], $args)) {
+        $mail->setFrom($args[2], $args[1]);
+    } else {
+        $mail->setFrom($config['from']);
+    }
+}
+
+// To:
+foreach ($to ? explode(',', $to) : [] as $addr) {
+    if (preg_match('~^(.+) *<(.+?)>~', $addr, $args)) {
+        $mail->addAddress($args[2], $args[1]);
+    } else {
+        $mail->addAddress($addr);
+    }
+}
+
+// CC:
+foreach ($cc ? explode(',', $cc) : [] as $addr) {
+    if (preg_match('~^(.+) *<(.+?)>~', $addr, $args)) {
+        $mail->addCC($args[2], $args[1]);
+    } else {
+        $mail->addCC($addr);
+    }
+}
+
+// BCC:
+foreach ($bcc ? explode(',', $bcc) : [] as $addr) {
+    if (preg_match('~^(.+) *<(.+?)>~', $addr, $args)) {
+        $mail->addBCC($args[2], $args[1]);
+    } else {
+        $mail->addBCC($addr);
+    }
+}
+
+// Encode the subject line to UTF-8
+$mail->Subject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
+
+// HTML body?
+if (!empty($html)) {
+    $mail->Body = substr($html, 0, 1) !== '@' ? $html : file_get_contents(substr($html, 1));
+    $mail->isHTML(true);
+} else {
+    $mail->Body = substr($body, 0, 1) !== '@' ? $body : file_get_contents(substr($body, 1));
+    $mail->WordWrap = 72;
+}
+
+// Attachments
+foreach ((array) $attachments as $attachment) {
+    $mail->addAttachment($attachment);
+}
+
+if ($priority) {
+    // https://stackoverflow.com/a/10766851
+    // For most clients expecting the Priority header:
+    // 1 = High, 2 = Medium, 3 = Low
+    $mail->Priority = 1;
+    // MS Outlook custom header
+    // May set to "Urgent" or "Highest" rather than "High"
+    $mail->AddCustomHeader('X-MSMail-Priority: High');
+}
+
+// Send the message, check for errors
+if (!$mail->send()) {
+    fwrite(STDERR, $mail->ErrorInfo . PHP_EOL);
+    exit(127);
+}

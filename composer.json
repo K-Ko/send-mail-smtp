@@ -1,0 +1,10 @@
+{
+	"name": "k-ko/send-mail-smtp",
+	"description": "Shell script wrapper for PHPMailer",
+	"require": {
+		"phpmailer/phpmailer": "^6.3"
+	},
+	"bin": [
+		"sendmail"
+	]
+}

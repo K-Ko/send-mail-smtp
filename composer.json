@@ -1,6 +1,14 @@
 {
 	"name": "k-ko/send-mail-smtp",
 	"description": "Shell script wrapper for PHPMailer",
+	"authors": [
+		{
+			"name": "Knut Kohl",
+			"email": "github@knutkohl.de",
+			"homepage": "https://github.com/K-Ko"
+		}
+	],
+	"license": "MIT",
 	"require": {
 		"phpmailer/phpmailer": "^6.3"
 	},

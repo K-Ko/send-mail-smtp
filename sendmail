@@ -34,20 +34,13 @@ function usage($msg = '', $rc = 0)
 /**
  * Try to find autoload.php
  */
-$autoloads = [
-    getcwd() . '/vendor/autoload.php',
-    getcwd() . '/../vendor/autoload.php',
-    getcwd() . '/../../vendor/autoload.php',
-    __DIR__  . '/vendor/autoload.php',
-];
-
-foreach ($autoloads as $autoload) {
+foreach ([ __DIR__  . '/../../autoload.php', __DIR__  . '/vendor/autoload.php' ] as $autoload) {
     if (is_file($autoload)) {
         require $autoload;
         break;
     }
 
-    die("\n::: ERROR Missing vendor/autoload.php, actual directory is '" . getcwd() . "'\n");
+    die("\n::: ERROR Missing autoload.php, actual directory is '" . getcwd() . "'\n");
 }
 
 $options = getopt("hc:t:w:z:s:b:f:a:p:v");
@@ -62,7 +55,7 @@ $html        = $options['f'] ?? null;
 $cc          = $options['w'] ?? null;
 $bcc         = $options['z'] ?? null;
 $attachments = $options['a'] ?? null;
-$priority    = $options['p'] ?? 0;
+$priority    = +($options['p'] ?? 0);
 
 if ($config == '' || $to == '' || $subject == '') {
     usage('Missing required parameter(s)', 1);

@@ -17,6 +17,7 @@ Send emails secure via your own email server
             -a      Attachment(s)
             -p      Priority (0|1)
             -v[vvv] PHPMailer verbosity
+            -h      This help
 
     Possible formats for emails: 'name@example.com' or 'any name <name@example.com>'
 

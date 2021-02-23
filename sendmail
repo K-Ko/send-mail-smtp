@@ -93,6 +93,16 @@ $config = array_merge(
         'pass'        => '',
         'verify_peer' => true,
         'timezone'    => 'UTC',
+        // Defaults, needed
+        'from'        => '',
+        'to'          => '',
+        'cc'          => '',
+        'bcc' 	      => '',
+        'subject'     => '',
+        'body'        => '',
+        'html'        => '',
+        'attachments' => [],
+        'priority'    => 0,
     ],
     $config
 );

@@ -112,8 +112,10 @@ $params = [
     'p' => 'priority',
 ];
 
-foreach ($params as $param => $key) {
-    $config[$key] = array_key_exists($param, $options) ? $options[$param] : null;
+foreach ($params as $short => $param) {
+    if (array_key_exists($short, $options)) {
+        $config[$param] = $options[$short];
+    }
 }
 
 $verbose && fwrite(
@@ -164,18 +166,15 @@ $mail->Password = $cfg_pass;
 
 // Set who the message is to be sent from
 if ($cfg_from) {
-    if (preg_match('~^(.+) *<(.+?)>~', $cfg_from, $args)) {
-        $mail->setFrom($args[2], $args[1]);
-    } else {
-        $mail->setFrom($cfg_from);
-    }
+    $addr = $mail->parseAddresses($cfg_from);
+    isset($addr[0]) && $mail->setFrom($addr[0]['address'], $addr[0]['name']);
 }
 
 // To: 'name@example.com' or 'any name <name@example.com>'
 if ($cfg_to) {
     foreach ((array) $cfg_to as $addr) {
         $addr = $mail->parseAddresses($addr);
-        $mail->addAddress($addr[0]['address'], $addr[0]['name']);
+        isset($addr[0]) && $mail->addAddress($addr[0]['address'], $addr[0]['name']);
     }
 }
 
@@ -183,7 +182,7 @@ if ($cfg_to) {
 if ($cfg_cc) {
     foreach ((array) $cfg_cc as $addr) {
         $addr = $mail->parseAddresses($addr);
-        $mail->addCC($addr[0]['address'], $addr[0]['name']);
+        isset($addr[0]) && $mail->addCC($addr[0]['address'], $addr[0]['name']);
     }
 }
 
@@ -191,7 +190,7 @@ if ($cfg_cc) {
 if ($cfg_bcc) {
     foreach ((array) $cfg_bcc as $addr) {
         $addr = $mail->parseAddresses($addr);
-        $mail->addBCC($addr[0]['address'], $addr[0]['name']);
+        isset($addr[0]) && $mail->addBCC($addr[0]['address'], $addr[0]['name']);
     }
 }
 

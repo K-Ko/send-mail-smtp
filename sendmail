@@ -2,6 +2,8 @@
 <?php
 // phpcs:ignorefile
 
+use PHPMailer\PHPMailer\PHPMailer;
+
 // ini_set('display_errors', 1);
 // error_reporting(-1);
 
@@ -14,20 +16,22 @@ function usage($msg = '', $rc = 0)
 
     $msg && printf("\nERROR - $msg\n");
 
-    printf("\nUsage: " . $argv[0] . " -c <config-file> -t <To: address> -s <subject> [options]\n\n");
+    printf("\nUsage: " . $argv[0] . " -c <config-file> [options]\n\n");
     printf("Options:\n");
     printf("\t-c\tConfig file {required}\n");
-    printf("\t-t\tTo: address(es) (comma separated) {required}\n");
-    printf("\t-s\tSubject {required}\n");
+    printf("\t-t\tTo: address(es), can be used multiple times\n");
+    printf("\t-s\tSubject\n");
     printf("\t-b\tPlain text body, if starts with @ assume get from file\n");
     printf("\t-f\tHTML body, if starts with @ assume get from file\n");
-    printf("\t-w\tCC: address(es) (comma separated)\n");
-    printf("\t-z\tBCC: address(es) (comma separated)\n");
+    printf("\t-w\tCC: address(es), can be used multiple times\n");
+    printf("\t-z\tBCC: address(es), can be used multiple times\n");
+    printf("\t-r\tFrom: From email address, overwrites config file if given\n");
     printf("\t-a\tAttachment(s)\n");
     printf("\t-p\tPriority (0|1)\n");
     printf("\t-v[vvv]\tPHPMailer verbosity\n");
     printf("\t-h\tThis help\n\n");
     printf("Possible formats for emails: 'name@example.com' or 'any name <name@example.com>'\n");
+    printf("If a HTML body is set, an additional plain text body will be ignored!\n");
 
     exit($rc);
 }
@@ -63,137 +67,167 @@ isset($autoloads) && _die('Missing autoload.php, actual directory is ' . getcwd(
 /**
  * Command line parameters
  */
-$options = getopt("hc:t:w:z:s:b:f:a:p:v");
+$options = getopt("hc:t:s:b:f:w:z:r:a:p:v");
 
 array_key_exists('h', $options) && usage();
 
-$config      = trim($options['c'] ?? '');
-$to          = trim($options['t'] ?? '');
-$subject     = trim($options['s'] ?? '');
-$body        = trim($options['b'] ?? '');
-$html        = trim($options['f'] ?? '');
-$cc          = trim($options['w'] ?? '');
-$bcc         = trim($options['z'] ?? '');
-$attachments = $options['a'] ?? null;
-$priority    = +($options['p'] ?? 0);
-$verbose     = min([count((array) ($options['v'] ?? null)), 4]);
+$verbose = min([count((array) ($options['v'] ?? null)), 4]);
 
-if ($config == '' || $to == '' || $subject == '') {
-    usage('Missing required parameter(s)', 1);
-}
+/**
+ * Load config
+ */
+$config = trim($options['c'] ?? '');
 
 if ($config && is_file($config)) {
     $config = require $config;
 } else {
-    _die('Missing config file, actual directory is ' . getcwd(), 1);
+    usage('Missing or invalid config file!', 1);
 }
+
+$config = array_merge(
+    [
+        // Defaults, not editable by command line
+        'host'        => '',
+        'port'        => 25,
+        'user'        => '',
+        'pass'        => '',
+        'verify_peer' => true,
+        'timezone'    => 'UTC',
+    ],
+    $config
+);
+
+/**
+ * Command line parameters
+ */
+$params = [
+    'r' => 'from',
+    't' => 'to',
+    'w' => 'cc',
+    'z' => 'bcc',
+    's' => 'subject',
+    'b' => 'body',
+    'f' => 'html',
+    'a' => 'attachments',
+    'p' => 'priority',
+];
+
+foreach ($params as $param => $key) {
+    $config[$key] = array_key_exists($param, $options) ? $options[$param] : null;
+}
+
+$verbose && fwrite(
+    STDERR,
+    implode(PHP_EOL, array_map(function ($k, $v) {
+        return sprintf('%-15s: %s', $k, trim(print_r($v, true)));
+    }, array_keys($config), array_values($config))) . PHP_EOL . PHP_EOL
+);
+
+extract($config, EXTR_PREFIX_ALL, 'cfg');
 
 // SMTP needs accurate times, and the PHP time zone MUST be set
 // This should be done in your php.ini, but this is how to do it if you don't have access to that
-date_default_timezone_set($config['timezone'] ?? 'UTC');
+date_default_timezone_set($cfg_timezone);
 
 /**
  * Create a PHPMailer instance
  */
-$mail = new \PHPMailer\PHPMailer\PHPMailer();
+$mail = new PHPMailer();
 
 $mail->XMailer    = null;       // Suppress X-Mailer header
-$mail->CharSet    = 'UTF-8';
-$mail->Encoding   = 'base64';
 $mail->AllowEmpty = true;       // Body may be empty, e.g. for status emails
 $mail->SMTPDebug  = $verbose;   // Enable SMTP debugging, -v ... -vvvv
+$mail->CharSet    = PHPMailer::CHARSET_UTF8;
+$mail->Encoding   = PHPMailer::ENCODING_BASE64;
 
-if (!($config['verify-peer'] ?? true)){
-    $mail->SMTPOptions = [
-        'ssl' => [
-            'verify_peer' => false,
-            'verify_peer_name' => false,
-            'allow_self_signed' => true
-        ]
-    ];
+// Send debug output to STDERR
+$mail->Debugoutput = function ($str, $level) {
+    fwrite(STDERR, sprintf('[%d] %s', $level, rtrim($str)) . PHP_EOL);
+};
+
+if (!$cfg_verify_peer){
+    $mail->SMTPOptions = [ 'ssl' => [ 'verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true ] ];
 }
 
-// Tell PHPMailer to use SMTP
+// Tell PHPMailer to use SMTP with authentication
 $mail->isSMTP();
+$mail->SMTPAuth = true;
+$mail->AuthType = 'LOGIN';
 
 // Set the hostname and port of the mail server
-$mail->Host = $config['host'] ?? '';
-$mail->Port = $config['port'] ?? 25; # likely to be 25, 465 or 587
+$mail->Host = $cfg_host;
+$mail->Port = $cfg_port; # likely to be 25, 465 or 587
 
-// Whether to use SMTP authentication
-$mail->SMTPAuth = true;
-
-// Username and password to use for SMTP authentication
-$mail->Username = $config['user'] ?? '';
-$mail->Password = $config['pass'] ?? '';
+// Username and password for SMTP authentication
+$mail->Username = $cfg_user;
+$mail->Password = $cfg_pass;
 
 // Set who the message is to be sent from
-if (isset($config['from'])) {
-    if (preg_match('~^(.+) *<(.+?)>~', $config['from'], $args)) {
+if ($cfg_from) {
+    if (preg_match('~^(.+) *<(.+?)>~', $cfg_from, $args)) {
         $mail->setFrom($args[2], $args[1]);
     } else {
-        $mail->setFrom($config['from']);
+        $mail->setFrom($cfg_from);
     }
 }
 
 // To: 'name@example.com' or 'any name <name@example.com>'
-foreach ($to ? explode(',', $to) : [] as $addr) {
-    if (preg_match('~^(.+) *<(.+?)>~', $addr, $args)) {
-        $mail->addAddress($args[2], trim($args[1]));
-    } else {
-        $mail->addAddress($addr);
+if ($cfg_to) {
+    foreach ((array) $cfg_to as $addr) {
+        $addr = $mail->parseAddresses($addr);
+        $mail->addAddress($addr[0]['address'], $addr[0]['name']);
     }
 }
 
 // CC: 'name@example.com' or 'any name <name@example.com>'
-foreach ($cc ? explode(',', $cc) : [] as $addr) {
-    if (preg_match('~^(.+) *<(.+?)>~', $addr, $args)) {
-        $mail->addCC($args[2], trim($args[1]));
-    } else {
-        $mail->addCC($addr);
+if ($cfg_cc) {
+    foreach ((array) $cfg_cc as $addr) {
+        $addr = $mail->parseAddresses($addr);
+        $mail->addCC($addr[0]['address'], $addr[0]['name']);
     }
 }
 
 // BCC: 'name@example.com' or 'any name <name@example.com>'
-foreach ($bcc ? explode(',', $bcc) : [] as $addr) {
-    if (preg_match('~^(.+) *<(.+?)>~', $addr, $args)) {
-        $mail->addBCC($args[2], trim($args[1]));
-    } else {
-        $mail->addBCC($addr);
+if ($cfg_bcc) {
+    foreach ((array) $cfg_bcc as $addr) {
+        $addr = $mail->parseAddresses($addr);
+        $mail->addBCC($addr[0]['address'], $addr[0]['name']);
     }
 }
 
-// Encode the subject line to UTF-8
-$mail->Subject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
+if (trim($cfg_subject)) {
+    // Encode the subject line to UTF-8
+    $mail->Subject = '=?UTF-8?B?' . base64_encode($cfg_subject) . '?=';
+}
 
 // 1st use HTML body
-if (!empty($html)) {
-    if (substr($html, 0, 1) === '@') {
-        $html = substr($html, 1);
-        is_file($html) || _die('Missing HTML body file: ' . $html, 2);
-        $html = file_get_contents($html);
+if (!empty($cfg_html)) {
+    if (substr($cfg_html, 0, 1) === '@') {
+        $cfg_html = substr($cfg_html, 1);
+        is_file($cfg_html) || _die('Missing HTML body file: ' . $cfg_html, 2);
+        $cfg_html = file_get_contents($cfg_html);
     }
 
-    $mail->Body = $html;
-    $mail->isHTML(true);
+    $mail->Body = $cfg_html;
+    $mail->isHTML();
 } else {
-    if (substr($body, 0, 1) === '@') {
-        $body = substr($body, 1);
-        is_file($body) || _die('Missing message body file: ' . $body, 3);
-        $body = file_get_contents($body);
+    if (substr($cfg_body, 0, 1) === '@') {
+        $cfg_body = substr($cfg_body, 1);
+        is_file($cfg_body) || _die('Missing message body file: ' . $cfg_body, 3);
+        $cfg_body = file_get_contents($cfg_body);
     }
 
-    $mail->Body = $body;
-    $mail->WordWrap = 72;
+    $mail->Body = $cfg_body;
+    $mail->WordWrap = PHPMailer::STD_LINE_LENGTH;
 }
 
 // Attachments
-foreach ((array) $attachments as $attachment) {
-    is_file($html) || _die('Missing attachment: ' . $attachment, 4);
+foreach ((array) $cfg_attachments as $attachment) {
+    is_file($attachment) || _die('Missing attachment: ' . $attachment, 4);
     $mail->addAttachment($attachment);
 }
 
-if ($priority) {
+if ($cfg_priority) {
     // https://stackoverflow.com/a/10766851
     // For most clients expecting the Priority header:
     // 1 = High, 2 = Medium, 3 = Low

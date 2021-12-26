@@ -17,7 +17,7 @@
             -w      CC: address(es), can be used multiple times
             -z      BCC: address(es), can be used multiple times
             -r      From: From email address, overwrites config file if given
-            -a      Attachment(s)
+            -a      Attachment(s); file_name[,display_name]
             -p      Priority (0|1)
             -v[vvv] PHPMailer verbosity
             -h      This help

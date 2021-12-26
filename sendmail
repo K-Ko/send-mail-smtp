@@ -97,7 +97,7 @@ $config = array_merge(
         'from'        => '',
         'to'          => '',
         'cc'          => '',
-        'bcc' 	      => '',
+        'bcc'           => '',
         'subject'     => '',
         'body'        => '',
         'html'        => '',
@@ -157,8 +157,8 @@ $mail->Debugoutput = function ($str, $level) {
     fwrite(STDERR, sprintf('[%d] %s', $level, rtrim($str)) . PHP_EOL);
 };
 
-if (!$cfg_verify_peer){
-    $mail->SMTPOptions = [ 'ssl' => [ 'verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true ] ];
+if (!$cfg_verify_peer) {
+    $mail->SMTPOptions = ['ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true]];
 }
 
 // Tell PHPMailer to use SMTP with authentication
@@ -232,8 +232,9 @@ if (!empty($cfg_html)) {
 
 // Attachments
 foreach ((array) $cfg_attachments as $attachment) {
-    is_file($attachment) || _die('Missing attachment: ' . $attachment, 4);
-    $mail->addAttachment($attachment);
+    $attachment = explode(',', $attachment);
+    is_file($attachment[0]) || _die('Missing attachment: ' . $attachment[0], 4);
+    $mail->addAttachment($attachment[0], $attachment[1] ?? '');
 }
 
 if ($cfg_priority) {
